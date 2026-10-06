@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>多机位同步剪辑</title>
+<style>
+  :root { --bg:#17181d; --panel:#22242c; --line:#34373f; --fg:#e8e9ee;
+          --muted:#9aa0ad; --accent:#4f8cff; --warn:#ffb648; --err:#ff6b6b;
+          --ok:#3ecf8e; }
+  * { box-sizing: border-box; }
+  body { margin:0; font:14px/1.5 system-ui, "Segoe UI", sans-serif;
+         background:var(--bg); color:var(--fg); }
+  header { padding:12px 20px; border-bottom:1px solid var(--line);
+           display:flex; gap:16px; align-items:baseline; flex-wrap:wrap; }
+  header h1 { font-size:17px; margin:0; }
+  header .spec { color:var(--muted); font-size:12px; }
+  main { display:grid; grid-template-columns: 380px 1fr; gap:14px; padding:14px; }
+  @media (max-width:1000px){ main{ grid-template-columns:1fr; } }
+  .panel { background:var(--panel); border:1px solid var(--line);
+           border-radius:10px; padding:14px; margin-bottom:14px; }
+  .panel h2 { font-size:14px; margin:0 0 10px; }
+  .muted { color:var(--muted); font-size:12px; }
+  label { display:block; font-size:12px; color:var(--muted); margin:6px 0 2px; }
+  input[type=text], input[type=number], input[type=file] {
+    width:100%; background:#17181d; border:1px solid var(--line); color:var(--fg);
+    border-radius:6px; padding:6px 8px; }
+  input[type=file]{ padding:4px; }
+  button { background:var(--accent); border:0; color:#fff; border-radius:6px;
+           padding:7px 14px; cursor:pointer; font-size:13px; }
+  button.secondary { background:#3a3e49; }
+  button.danger { background:#5a3137; color:#ffb7b7; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:8px; align-items:center; }
+  .anchor-row, .cut-row { display:grid; gap:6px; align-items:center;
+       padding:6px 0; border-bottom:1px dashed var(--line); }
+  .anchor-row { grid-template-columns: 1fr 1fr 30px; }
+  .cut-row { grid-template-columns: 1fr 1fr 64px 30px; }
+  .grid3 { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px; }
+  .tag { display:inline-block; font-size:11px; padding:1px 7px; border-radius:10px;
+         background:#333743; color:var(--muted); }
+  .tag.A { background:#26324a; color:#9cc0ff; }
+  .tag.B { background:#27403a; color:#8fe0bd; }
+  .tag.master { background:#3f2d47; color:#d3a8ef; }
+  #messages { min-height:20px; font-size:13px; }
+  .ok { color:var(--ok); } .err{ color:var(--err); } .warn{ color:var(--warn); }
+  .preview-stage { background:#000; border:1px solid var(--line); border-radius:8px;
+       display:flex; align-items:center; justify-content:center; min-height:300px; }
+  #frameImg { max-width:100%; image-rendering:pixelated; }
+  .info { font-family:ui-monospace, Menlo, monospace; font-size:12px;
+          background:#17181d; border:1px solid var(--line); border-radius:6px;
+          padding:8px 10px; margin-top:8px; white-space:pre-wrap; }
+  .bar { height:8px; background:#17181d; border-radius:4px; overflow:hidden;
+         margin:8px 0; }
+  .bar > div { height:100%; background:var(--accent); width:0; transition:width .2s; }
+  .jobs .job { border-top:1px solid var(--line); padding:8px 0; font-size:12px; }
+  .jobs a { color:var(--accent); }
+  audio { width:100%; margin-top:8px; }
+  .hint { font-size:11px; color:var(--muted); margin-top:4px; }
+</style>
+</head>
+<body>
+<header>
+  <h1>多机位同步剪辑</h1>
+  <span class="spec">输出固定 30 fps · 48 kHz · 半开区间选机 · 未选补黑 / 静音 · 全程有理数时间</span>
+  <span style="flex:1"></span>
+  <span class="spec" id="canvasSpec">画布：未确定</span>
+</header>
+<main>
+  <section>
+    <div class="panel">
+      <h2>1. 上传素材</h2>
+      <div class="grid3">
+        <div>
+          <span class="tag A">机位 A</span>
+          <input type="file" id="fileA" accept="video/*">
+          <div class="muted" id="metaA"></div>
+        </div>
+        <div>
+          <span class="tag B">机位 B</span>
+          <input type="file" id="fileB" accept="video/*">
+          <div class="muted" id="metaB"></div>
+        </div>
+        <div>
+          <span class="tag master">主音轨</span>
+          <input type="file" id="fileM" accept=".wav,audio/wav">
+          <div class="muted" id="metaM"></div>
+        </div>
+      </div>
+      <div class="hint">视频须在画面中带显示时间戳；主音轨仅接受 WAV。</div>
+    </div>
+
+    <div class="panel">
+      <h2>2. 成片时长与锚点</h2>
+      <label>成片时长（秒，自 0 开始；支持 10/3 形式）</label>
+      <input type="text" id="duration" value="0">
+      <div id="anchorEditors"></div>
+    </div>
+
+    <div class="panel">
+      <h2>3. 机位选择（半开区间，不重叠；未选补黑）</h2>
+      <div class="anchor-row cut-row" style="color:var(--muted);border-bottom:1px solid var(--line)">
+        <span>开始 s</span><span>结束 s</span><span>机位</span><span></span>
+      </div>
+      <div id="cutList"></div>
+      <div class="row" style="margin-top:8px">
+        <button class="secondary" id="addCut">+ 增加区间</button>
+        <button id="save">保存剪辑</button>
+      </div>
+      <div class="hint">保存后预览与导出共用同一份时间映射。</div>
+    </div>
+
+    <div class="panel">
+      <h2>4. 导出 MP4</h2>
+      <div class="row">
+        <button id="exportBtn">开始导出</button>
+        <span class="muted" id="exportReady"></span>
+      </div>
+      <div class="jobs" id="jobList"></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="panel">
+      <h2>逐帧预览</h2>
+      <div class="preview-stage">
+        <img id="frameImg" alt="预览帧" src="">
+      </div>
+      <div class="row" style="margin-top:10px; gap:6px">
+        <button class="secondary" id="prevFrame">◀ 帧</button>
+        <input type="range" id="frameSlider" min="0" max="0" value="0" style="flex:1">
+        <button class="secondary" id="nextFrame">帧 ▶</button>
+        <input type="text" id="jumpTime" placeholder="跳到秒" style="width:90px">
+        <button class="secondary" id="jumpBtn">跳转</button>
+      </div>
+      <div class="info" id="frameInfo">未加载</div>
+      <div class="row" style="margin-top:8px">
+        <button class="secondary" id="reloadAudio">刷新主音轨预览（48 kHz WAV）</button>
+      </div>
+      <audio id="audioPlayer" controls></audio>
+    </div>
+    <div class="panel">
+      <h2>消息</h2>
+      <div id="messages"></div>
+    </div>
+  </section>
+</main>
+
+<script src="/web/app.js"></script>
+</body>
+</html>
