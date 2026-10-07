@@ -1,0 +1,9 @@
+data/
+samples/
+.venv/
+.pylibs/
+.home/
+.tools/
+__pycache__/
+*.pyc
+.git/

@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>本地多机位同步剪辑</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>本地多机位同步剪辑 <span class="dim">30 fps · 48 kHz · 有理数时间映射</span></h1>
+</header>
+
+<main>
+<section class="panel">
+  <h2>1. 素材上传</h2>
+  <div class="row">
+    <label>机位视频 A/B：
+      <input type="file" id="upVideo" accept="video/*" multiple>
+    </label>
+    <label>主音轨 WAV：
+      <input type="file" id="upAudio" accept="audio/*,.wav">
+    </label>
+  </div>
+  <div id="assetList" class="asset-list"></div>
+  <p class="hint">
+    每段素材可设置“显示时间戳起点 <code>material0</code>”与“钟速
+    <code>clock</code>（素材秒 / 容器秒）”，用于把容器帧号换算到显示时钟。
+    锚点的“素材时刻”使用该显示时钟。
+  </p>
+</section>
+
+<section class="panel">
+  <h2>2. 剪辑参数</h2>
+  <div class="row">
+    <label>成片时长（秒，1/30 与 1/48000 的整数倍，如 <code>4</code>、<code>121/30</code>）：
+      <input id="duration" value="" size="12">
+    </label>
+    <button id="btnPrefill">填充样例参数</button>
+    <button id="btnValidate">仅校验</button>
+    <span id="editMsg" class="msg"></span>
+  </div>
+
+  <h3>素材时刻 ↔ 成片时刻锚点（每素材 ≥ 2 个，严格递增，段内线性映射）</h3>
+  <div id="anchorEditor"></div>
+
+  <h3>机位选择（不重叠半开区间 [start, end)，未覆盖处补黑）</h3>
+  <div id="cutEditor"></div>
+  <div class="row">
+    <button id="btnAddCut">+ 机位区间</button>
+    <button id="btnSave" class="primary">保存剪辑</button>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>3. 逐帧预览（与导出同一条时间映射）</h2>
+  <div class="row">
+    <button id="btnPrev">◀ 上一帧</button>
+    <button id="btnPlay">播放 / 暂停</button>
+    <button id="btnNext">下一帧 ▶</button>
+    <label>跳转帧：<input id="jumpFrame" type="number" min="0" size="7"></label>
+    <button id="btnJump">跳转</button>
+    <span id="frameInfo" class="dim"></span>
+  </div>
+  <div class="preview-wrap">
+    <img id="previewImg" alt="preview" width="480">
+  </div>
+  <pre id="frameRecord" class="record"></pre>
+</section>
+
+<section class="panel">
+  <h2>4. 导出（绑定启动时快照，可继续编辑）</h2>
+  <div class="row">
+    <button id="btnExport" class="primary">开始导出 MP4</button>
+    <button id="btnCancelExport">取消当前导出</button>
+    <span id="exportMsg" class="msg"></span>
+  </div>
+  <table id="exportTable">
+    <thead><tr><th>任务</th><th>状态</th><th>创建时间</th><th>完成时间</th><th>文件</th><th>对应记录</th><th>错误</th></tr></thead>
+    <tbody></tbody>
+  </table>
+</section>
+</main>
+
+<script src="/app.js"></script>
+</body>
+</html>
